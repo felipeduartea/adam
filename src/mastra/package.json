@@ -18,9 +18,11 @@
   },
   "dependencies": {
     "@ai-sdk/groq": "^2.0.22",
+    "@ai-sdk/openai": "^2.0.42",
     "@mastra/core": "^0.20.0",
     "@mastra/libsql": "^0.15.1",
     "@mastra/loggers": "^0.10.15",
+    "@mastra/mcp": "^0.13.3",
     "@mastra/memory": "^0.15.5",
     "zod": "^3.25.76"
   },
