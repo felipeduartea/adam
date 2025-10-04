@@ -100,7 +100,18 @@ router.openapi(LinearConnectRoute, async (c) => {
       Authorization: accessToken,
     },
     body: JSON.stringify({
-      query: `query { viewer { id name email organization { id name } } }`,
+      query: `query ViewerWithOrg {
+        viewer {
+          id
+          name
+          email
+          avatarUrl
+          organization {
+            id
+            name
+          }
+        }
+      }`,
     }),
   });
 
@@ -112,44 +123,110 @@ router.openapi(LinearConnectRoute, async (c) => {
   const viewerJson = (await viewerResponse.json()) as {
     data?: {
       viewer?: {
+        id?: string | null;
+        name?: string | null;
+        email?: string | null;
+        avatarUrl?: string | null;
         organization?: {
-          id?: string;
+          id?: string | null;
+          name?: string | null;
         } | null;
       } | null;
     };
+    errors?: Array<{ message?: string }>;
   };
 
-  const orgId = viewerJson.data?.viewer?.organization?.id ?? null;
-  const redirectTarget = orgId ? `/connected?orgId=${encodeURIComponent(orgId)}` : "/connected?error=missing_org";
+  const viewer = viewerJson.data?.viewer ?? null;
 
-  if (orgId) {
-    const userId = c.get("userId");
-    const expiresAt =
-      typeof tokenJson.expires_in === "number" ? new Date(Date.now() + tokenJson.expires_in * 1000) : null;
-
-    // await prisma.linearConnection.upsert({
-    //   where: {
-    //     userId_orgId: {
-    //       userId,
-    //       orgId,
-    //     },
-    //   },
-    //   update: {
-    //     accessToken,
-    //     refreshToken: tokenJson.refresh_token ?? null,
-    //     expiresAt,
-    //   },
-    //   create: {
-    //     userId,
-    //     orgId,
-    //     accessToken,
-    //     refreshToken: tokenJson.refresh_token ?? null,
-    //     expiresAt,
-    //   },
-    // });
+  if (!viewer?.organization?.id) {
+    const errorMessage =
+      viewerJson.errors?.map((err) => err.message).join(", ") ?? "Linear viewer organization missing in response";
+    return c.json({ error: errorMessage }, 500);
   }
 
-  return c.redirect(redirectTarget, 302);
+  const linearOrgId = viewer.organization.id;
+  const linearOrgName = viewer.organization.name ?? null;
+  const userId = c.get("userId");
+
+  const currentUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, organizationId: true },
+  });
+
+  if (!currentUser?.organizationId) {
+    return c.json({ error: "Authenticated user is not associated with an organization" }, 400);
+  }
+
+  const expiresAt =
+    typeof tokenJson.expires_in === "number" ? new Date(Date.now() + tokenJson.expires_in * 1000) : null;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.organization.update({
+      where: { id: currentUser.organizationId! },
+      data: {
+        linearOrgId,
+        linearOrgName,
+      },
+    });
+
+    await tx.linearConnection.upsert({
+      where: { organizationId: currentUser.organizationId! },
+      update: {
+        orgLinearId: linearOrgId,
+        orgName: linearOrgName,
+        accessToken,
+        refreshToken: tokenJson.refresh_token ?? null,
+        expiresAt,
+        installerUserId: userId,
+      },
+      create: {
+        organizationId: currentUser.organizationId!,
+        orgLinearId: linearOrgId,
+        orgName: linearOrgName,
+        accessToken,
+        refreshToken: tokenJson.refresh_token ?? null,
+        expiresAt,
+        installerUserId: userId,
+      },
+    });
+
+    if (viewer.id) {
+      await tx.linearUser.upsert({
+        where: {
+          orgLinearId_linearUserId: {
+            orgLinearId: linearOrgId,
+            linearUserId: viewer.id,
+          },
+        },
+        update: {
+          name: viewer.name ?? null,
+          email: viewer.email ?? null,
+          avatarUrl: viewer.avatarUrl ?? null,
+          localUserId: userId,
+        },
+        create: {
+          orgLinearId: linearOrgId,
+          linearUserId: viewer.id,
+          name: viewer.name ?? null,
+          email: viewer.email ?? null,
+          avatarUrl: viewer.avatarUrl ?? null,
+          localUserId: userId,
+        },
+      });
+    }
+  });
+
+  const redirectParams = new URLSearchParams({
+    orgId: linearOrgId,
+    organizationId: currentUser.organizationId,
+    status: "success",
+  });
+
+  if (viewer.id) {
+    redirectParams.set("linearUserId", viewer.id);
+  }
+
+  return c.redirect(`/connected?${redirectParams.toString()}`, 302);
 });
 
 export default router;
