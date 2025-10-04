@@ -56,14 +56,44 @@ export const callAgentsTool = createTool({
       // Call the agent with default maxSteps of 50
       const result = await agent.generate(input, { maxSteps: 50 });
 
+      // Debug: Log the actual structure of result
+      console.log("\n[Call Agents Tool] 🔍 RESULT STRUCTURE", {
+        hasToolCalls: !!result.toolCalls,
+        toolCallsLength: result.toolCalls?.length,
+        toolCallsSample: result.toolCalls?.[0] ? JSON.stringify(result.toolCalls[0], null, 2) : 'none',
+        resultKeys: Object.keys(result),
+      });
+
+      // Extract tool calls with better handling
+      let toolCalls: Array<{ toolName: string; args: any }> | undefined;
+      
+      if (result.toolCalls && Array.isArray(result.toolCalls)) {
+        toolCalls = result.toolCalls
+          .map((tc: any) => {
+            // Try different possible property names for tool name
+            const toolName = tc.toolName || tc.name || tc.toolCallId || tc.type || "";
+            // Try different possible property names for arguments
+            const args = tc.args || tc.arguments || tc.parameters || tc.input || {};
+            
+            console.log("\n[Call Agents Tool] 🔧 EXTRACTING TOOL CALL", {
+              rawToolCall: JSON.stringify(tc, null, 2),
+              extractedToolName: toolName,
+              extractedArgs: JSON.stringify(args, null, 2),
+            });
+            
+            return {
+              toolName,
+              args,
+            };
+          })
+          .filter(tc => tc.toolName !== ""); // Filter out empty tool names
+      }
+
       return {
         agentId,
         agentName: agent.name,
         response: result.text || "",
-        toolCalls: result.toolCalls?.map((tc: any) => ({
-          toolName: tc.toolName || tc.name || "",
-          args: tc.args || tc.arguments || {},
-        })),
+        toolCalls,
         usage: result.usage
           ? {
               totalTokens: result.usage.totalTokens,
