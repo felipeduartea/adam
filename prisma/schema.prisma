@@ -77,3 +77,20 @@ model Verification {
 
   @@map("verification")
 }
+
+model VectorText {
+  id             Int                       @id @default(autoincrement())
+  filePath       String                    @map("file_path")
+  chunkContent   String                    @map("chunk_content")
+  functionName   String?                   @map("function_name")
+  className      String?                   @map("class_name")
+  language       String
+  chunkType      String                    @map("chunk_type")
+  lineStart      Int                       @map("line_start")
+  lineEnd        Int                       @map("line_end")
+  embedding      Unsupported("vector(1536)")
+  metadata       Json?
+  createdAt      DateTime                  @default(now()) @map("created_at")
+
+  @@map("vector_text")
+}
