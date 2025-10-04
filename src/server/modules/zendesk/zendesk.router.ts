@@ -149,6 +149,41 @@ const ZendeskWebhookInfoRoute = createRoute({
   },
 });
 
+const ZendeskStatusRoute = createRoute({
+  method: "get",
+  path: "/status",
+  middleware: [requireAuthentication] as const,
+  tags: ["Zendesk"],
+  summary: "Get Zendesk integration status for the authenticated user's organization",
+  responses: {
+    200: {
+      description: "Integration status",
+      content: {
+        "application/json": {
+          schema: z.object({
+            connected: z.boolean(),
+            integration: z
+              .object({
+                id: z.string(),
+                zendeskSubdomain: z.string(),
+                status: z.nativeEnum(ZendeskIntegrationStatus),
+                webhook: z
+                  .object({
+                    endpointPath: z.string(),
+                    webhookUrl: z.string(),
+                    isActive: z.boolean(),
+                    createdAt: z.string(),
+                  })
+                  .nullable(),
+              })
+              .nullable(),
+          }),
+        },
+      },
+    },
+  },
+});
+
 type JsonObject = Record<string, unknown>;
 
 type ParsedTicket = {
@@ -289,6 +324,53 @@ router.openapi(ZendeskWebhookInfoRoute, async (c) => {
     },
     200,
   );
+});
+
+router.openapi(ZendeskStatusRoute, async (c) => {
+  const userId = c.get("userId");
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { organizationId: true },
+  });
+
+  if (!user?.organizationId) {
+    return c.json({ connected: false, integration: null });
+  }
+
+  const integration = await prisma.zendeskIntegration.findFirst({
+    where: { organizationId: user.organizationId },
+    include: { webhook: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!integration) {
+    return c.json({ connected: false, integration: null });
+  }
+
+  const host = c.req.header("host") ?? "localhost:3000";
+  const protocol = c.req.header("x-forwarded-proto") || (host.startsWith("localhost") ? "http" : "https");
+  const webhookUrl = integration.webhook
+    ? `${protocol}://${host}/api/zendesk${integration.webhook.endpointPath}`
+    : null;
+
+  const payload = {
+    id: integration.id,
+    zendeskSubdomain: integration.zendeskSubdomain,
+    status: integration.status,
+    webhook: integration.webhook
+      ? {
+          endpointPath: integration.webhook.endpointPath,
+          webhookUrl: webhookUrl!,
+          isActive: integration.webhook.isActive,
+          createdAt: integration.webhook.createdAt.toISOString(),
+        }
+      : null,
+  } as const;
+
+  const connected = integration.status === ZendeskIntegrationStatus.ACTIVE && Boolean(integration.webhook?.isActive);
+
+  return c.json({ connected, integration: payload });
 });
 
 // Webhook receiver endpoint
