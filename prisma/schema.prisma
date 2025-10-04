@@ -333,3 +333,39 @@ model ZendeskTicketMessage {
   @@unique([zendeskIntegrationId, externalMessageId])
   @@index([ticketId, createdAtVendor])
 }
+
+model Repo {
+  id        String   @id @default(uuid()) @db.Uuid
+  url       String   @unique
+  name      String
+  localPath String?  @map("local_path")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  vectorTexts VectorText[]
+
+  @@map("repos")
+}
+
+model VectorText {
+  id           Int                         @id @default(autoincrement())
+  repoId       String                      @map("repo_id") @db.Uuid
+  filePath     String                      @map("file_path")
+  chunkContent String                      @map("chunk_content")
+  functionName String?                     @map("function_name")
+  className    String?                     @map("class_name")
+  language     String
+  chunkType    String                      @map("chunk_type")
+  lineStart    Int                         @map("line_start")
+  lineEnd      Int                         @map("line_end")
+  embedding    Unsupported("vector(1536)")
+  metadata     Json?
+  createdAt    DateTime                    @default(now()) @map("created_at")
+
+  // Relation to Repo
+  repo Repo @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@index([repoId])
+  @@map("vector_text")
+}
