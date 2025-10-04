@@ -1,10 +1,16 @@
 "use client";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
-import { CircleDashed, ArrowRight } from "lucide-react";
+import { CircleDashed, ArrowRight, MoreVertical, LogOut } from "lucide-react";
 import { GitHub } from "@/components/icons/github";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function Home() {
   const { data: session, isPending: loading } = authClient.useSession();
@@ -17,6 +23,10 @@ export default function Home() {
     });
   };
 
+  const handleSignOut = async () => {
+    await authClient.signOut();
+  };
+
   return (
     <div className="min-h-screen bg-white flex items-center justify-center p-4">
       {!loading && (
@@ -24,8 +34,29 @@ export default function Home() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3 }}
-          className="bg-white border border-gray-200 rounded-2xl p-8 w-full max-w-md shadow-sm"
+          className="relative bg-white border border-gray-200 rounded-2xl p-8 w-full max-w-md shadow-sm"
         >
+          {/* Dropdown Menu - Only show when user is logged in */}
+          {user && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute top-4 right-4 h-8 w-8"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleSignOut}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Sign out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
           <div className="flex flex-col items-start">
             {/* Icon Section */}
             <div className="bg-[#4b9466] text-white rounded-xl p-3 mb-6">

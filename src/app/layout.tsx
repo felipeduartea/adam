@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ADAM",
+  title: "Adam | Better decisions",
   description: "Rethink your decision-making",
 };
 
