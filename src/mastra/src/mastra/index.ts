@@ -7,6 +7,7 @@ import { githubAnalystAgent } from "./agents/adam/github-analyst-agent";
 import { analyticsAgent } from "./agents/adam/analytics-agent";
 import { roadmapAgent } from "./agents/adam/roadmap-agent";
 import { zendeskAgent } from "./agents/adam/zendesk-agent";
+import { linearAgent } from "./agents/adam/linear-agent";
 import { orchestratorAgent } from "./agents/adam/orchestrator-agent";
 import { indexRepoWorkflow } from "./workflows/index-repo-workflow";
 import { analyzeRepoWorkflow } from "./workflows/analyze-repo-workflow";
@@ -23,6 +24,7 @@ export const mastra = new Mastra({
     orchestratorAgent,
     analyticsAgent,
     zendeskAgent,
+    linearAgent,
     roadmapAgent,
     githubAnalystAgent,
     // indexAgent,
