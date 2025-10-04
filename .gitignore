@@ -42,3 +42,12 @@ yarn-error.log*
 next-env.d.ts
 
 **/generated/prisma
+
+output.txt
+node_modules
+dist
+.mastra
+.env.development
+.env
+*.db
+*.db-*
