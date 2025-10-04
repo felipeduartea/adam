@@ -310,14 +310,6 @@ router.openapi(ZendeskWebhookRoute, async (c) => {
   const rawBody = await c.req.text();
   const providedSignature = extractZendeskSignature(c);
 
-  if (!providedSignature) {
-    return c.json({ error: "Missing Zendesk signature" }, 401);
-  }
-
-  if (!verifyZendeskSignature(rawBody, webhook.signingSecret, providedSignature)) {
-    return c.json({ error: "Invalid Zendesk signature" }, 401);
-  }
-
   let payload: JsonObject;
   try {
     payload = JSON.parse(rawBody) as JsonObject;
