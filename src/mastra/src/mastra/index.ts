@@ -20,5 +20,6 @@ export const mastra = new Mastra({
     zendeskAgent,
     roadmapAgent,
     githubAnalystAgent,
-    dockerAgent, githubAgent, indexAgent, plannerAgent },
+    indexAgent,
+  },
 });
