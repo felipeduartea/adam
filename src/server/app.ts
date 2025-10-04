@@ -17,10 +17,13 @@ const app = new OpenAPIHono()
     },
     tags: [
       {
-        name: "Hello, world!",
+        name: "Posts",
       },
       {
-        name: "Users",
+        name: "Linear",
+      },
+      {
+        name: "Zendesk",
       },
     ],
   })

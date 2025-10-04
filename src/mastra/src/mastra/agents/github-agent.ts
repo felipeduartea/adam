@@ -3,6 +3,7 @@ import { githubMCP } from "../mcps/github-mcp-client";
 import { groq } from "@ai-sdk/groq";
 
 export const githubAgent = new Agent({
+  id: "githubAgent",
   name: "GitHub Agent",
   instructions: `
 You are a helpful GitHub assistant. 
