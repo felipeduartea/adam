@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Send, Loader2, Sparkles } from "lucide-react"
 import type { Node, Edge } from "@xyflow/react"
+import { convertEntitiesToNodes } from "@/lib/workflow-utils"
 
 interface WorkflowInputProps {
   nodes: Node[]
@@ -31,7 +32,6 @@ export default function WorkflowInput({ nodes, setNodes, edges, setEdges }: Work
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: input,
-          currentWorkflow: { nodes, edges },
         }),
       })
 
@@ -39,13 +39,16 @@ export default function WorkflowInput({ nodes, setNodes, edges, setEdges }: Work
 
       const data = await response.json()
 
-      // Add new nodes and edges to the canvas
-      if (data.nodes && data.nodes.length > 0) {
-        setNodes([...nodes, ...data.nodes])
-      }
-      if (data.edges && data.edges.length > 0) {
-        setEdges([...edges, ...data.edges])
-      }
+      const { nodes: newNodes, edges: newEdges } = convertEntitiesToNodes({
+        projects: data.projects || [],
+        sprints: data.sprints || [],
+        issues: data.issues || [],
+        users: [],
+      })
+
+      // Replace current workflow with new one
+      setNodes(newNodes)
+      setEdges(newEdges)
 
       setInput("")
     } catch (error) {
@@ -64,7 +67,7 @@ export default function WorkflowInput({ nodes, setNodes, edges, setEdges }: Work
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Describe your workflow... (e.g., 'Create a data processing pipeline')"
+              placeholder="Describe your project... (e.g., 'Build a mobile app with authentication and user profiles')"
               disabled={isLoading}
               className="border-0 bg-transparent px-0 focus-visible:ring-0 focus-visible:ring-offset-0"
             />
@@ -84,7 +87,7 @@ export default function WorkflowInput({ nodes, setNodes, edges, setEdges }: Work
           </Button>
         </form>
         <p className="mt-2 text-center text-xs text-muted-foreground">
-          AI will generate workflow nodes based on your description
+          AI will generate a project workflow with sprints and issues
         </p>
       </div>
     </div>

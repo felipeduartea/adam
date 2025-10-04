@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback } from "react"
+import { useCallback, useEffect } from "react"
 import {
   ReactFlow,
   Background,
@@ -14,10 +14,17 @@ import {
   type Edge,
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
-import CustomNode from "../components/custom-node"
+import CustomNode from "./custom-node"
+import SprintNode from "./sprint-node"
+import LabeledSprintGroupNode from "./labeled-sprint-group-node"
+import IssueNode from "./issue-node"
+import GroupNode from "./group-node"
 
 const nodeTypes = {
   custom: CustomNode,
+  sprint: LabeledSprintGroupNode,
+  issue: IssueNode,
+  group: GroupNode,
 }
 
 interface WorkflowCanvasProps {
@@ -31,6 +38,14 @@ export default function WorkflowCanvas({ nodes, setNodes, edges, setEdges }: Wor
   const [internalNodes, setInternalNodes, onNodesChange] = useNodesState(nodes)
   const [internalEdges, setInternalEdges, onEdgesChange] = useEdgesState(edges)
 
+  useEffect(() => {
+    setInternalNodes(nodes)
+  }, [nodes, setInternalNodes])
+
+  useEffect(() => {
+    setInternalEdges(edges)
+  }, [edges, setInternalEdges])
+
   const onConnect = useCallback(
     (params: Connection) => {
       const newEdges = addEdge(params, internalEdges)
@@ -40,7 +55,6 @@ export default function WorkflowCanvas({ nodes, setNodes, edges, setEdges }: Wor
     [internalEdges, setInternalEdges, setEdges],
   )
 
-  // Sync internal state with props
   const handleNodesChange = useCallback(
     (changes: any) => {
       onNodesChange(changes)
@@ -76,3 +90,4 @@ export default function WorkflowCanvas({ nodes, setNodes, edges, setEdges }: Wor
     </div>
   )
 }
+

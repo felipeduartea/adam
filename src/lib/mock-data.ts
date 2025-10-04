@@ -1,0 +1,252 @@
+import type { Project, Sprint, Issue, Organization, User } from "@/types/entities"
+
+export const mockOrganization: Organization = {
+  id: "org-1",
+  name: "Acme Corporation",
+}
+
+export const mockUsers: User[] = [
+  {
+    id: "user-1",
+    name: "Alice Johnson",
+    org_id: "org-1",
+    project: "proj-1",
+    role: "admin",
+    permission: ["read", "write", "delete", "manage_users"],
+    organization: mockOrganization,
+  },
+  {
+    id: "user-2",
+    name: "Bob Smith",
+    org_id: "org-1",
+    project: "proj-1",
+    role: "developer",
+    permission: ["read", "write"],
+    organization: mockOrganization,
+  },
+  {
+    id: "user-3",
+    name: "Carol Davis",
+    org_id: "org-1",
+    project: "proj-1",
+    role: "manager",
+    permission: ["read", "write", "manage_sprints"],
+    organization: mockOrganization,
+  },
+  {
+    id: "user-4",
+    name: "David Lee",
+    org_id: "org-1",
+    project: "proj-1",
+    role: "developer",
+    permission: ["read", "write"],
+    organization: mockOrganization,
+  },
+]
+
+export const mockProjects: Project[] = [
+  {
+    id: "proj-1",
+    title: "Q1 2025 Product Development",
+    description: "E-Commerce Platform Redesign - Complete overhaul of customer-facing platform",
+    start_date: "2025-01-01",
+    due_date: "2025-03-31",
+  },
+]
+
+export const mockSprints: Sprint[] = [
+  {
+    id: "sprint-1",
+    title: "Sprint 1 - Foundation",
+    project_id: "proj-1",
+    description: "Project setup and infrastructure",
+    start_date: "2025-01-01",
+    due_date: "2025-01-14",
+    project: mockProjects[0],
+  },
+  {
+    id: "sprint-2",
+    title: "Sprint 2 - Authentication",
+    project_id: "proj-1",
+    description: "User authentication and authorization",
+    start_date: "2025-01-15",
+    due_date: "2025-01-28",
+    project: mockProjects[0],
+  },
+  {
+    id: "sprint-3",
+    title: "Sprint 3 - Core Features",
+    project_id: "proj-1",
+    description: "Product catalog and shopping cart",
+    start_date: "2025-01-29",
+    due_date: "2025-02-11",
+    project: mockProjects[0],
+  },
+  {
+    id: "sprint-4",
+    title: "Sprint 4 - Checkout",
+    project_id: "proj-1",
+    description: "Payment processing and order management",
+    start_date: "2025-02-12",
+    due_date: "2025-02-25",
+    project: mockProjects[0],
+  },
+]
+
+export const mockIssues: Issue[] = [
+  // Sprint 1 issues
+  {
+    id: "issue-1",
+    title: "Initialize Next.js project",
+    description: "Set up Next.js 15 with TypeScript and App Router",
+    sprint_id: "sprint-1",
+    status: "done",
+    assignee: "user-2",
+    sprint: mockSprints[0],
+    user: mockUsers[1],
+  },
+  {
+    id: "issue-2",
+    title: "Configure Tailwind CSS",
+    description: "Set up Tailwind with custom theme and design tokens",
+    sprint_id: "sprint-1",
+    status: "done",
+    assignee: "user-1",
+    sprint: mockSprints[0],
+    user: mockUsers[0],
+  },
+  {
+    id: "issue-3",
+    title: "Set up database",
+    description: "Configure PostgreSQL and create initial schema",
+    sprint_id: "sprint-1",
+    status: "done",
+    assignee: "user-2",
+    sprint: mockSprints[0],
+    user: mockUsers[1],
+  },
+
+  // Sprint 2 issues
+  {
+    id: "issue-4",
+    title: "User registration API",
+    description: "Create endpoint for new user registration",
+    sprint_id: "sprint-2",
+    status: "done",
+    assignee: "user-2",
+    sprint: mockSprints[1],
+    user: mockUsers[1],
+  },
+  {
+    id: "issue-5",
+    title: "Login form component",
+    description: "Build responsive login form with validation",
+    sprint_id: "sprint-2",
+    status: "in_progress",
+    assignee: "user-1",
+    sprint: mockSprints[1],
+    user: mockUsers[0],
+  },
+  {
+    id: "issue-6",
+    title: "JWT authentication",
+    description: "Implement token-based authentication",
+    sprint_id: "sprint-2",
+    status: "in_progress",
+    assignee: "user-4",
+    sprint: mockSprints[1],
+    user: mockUsers[3],
+  },
+  {
+    id: "issue-7",
+    title: "Password reset flow",
+    description: "Add forgot password and reset functionality",
+    sprint_id: "sprint-2",
+    status: "todo",
+    assignee: "user-2",
+    sprint: mockSprints[1],
+    user: mockUsers[1],
+  },
+
+  // Sprint 3 issues
+  {
+    id: "issue-8",
+    title: "Product card component",
+    description: "Design and build reusable product card",
+    sprint_id: "sprint-3",
+    status: "todo",
+    assignee: "user-1",
+    sprint: mockSprints[2],
+    user: mockUsers[0],
+  },
+  {
+    id: "issue-9",
+    title: "Product listing page",
+    description: "Create paginated product listing with filters",
+    sprint_id: "sprint-3",
+    status: "todo",
+    assignee: "user-4",
+    sprint: mockSprints[2],
+    user: mockUsers[3],
+  },
+  {
+    id: "issue-10",
+    title: "Search functionality",
+    description: "Implement full-text product search",
+    sprint_id: "sprint-3",
+    status: "todo",
+    sprint: mockSprints[2],
+    assignee: "",
+    user: mockUsers[1],
+  },
+  {
+    id: "issue-11",
+    title: "Shopping cart",
+    description: "Build cart with add/remove/update quantity",
+    sprint_id: "sprint-3",
+    status: "todo",
+    assignee: "user-2",
+    sprint: mockSprints[2],
+    user: mockUsers[1],
+  },
+
+  // Sprint 4 issues
+  {
+    id: "issue-12",
+    title: "Checkout flow",
+    description: "Multi-step checkout with address and payment",
+    sprint_id: "sprint-4",
+    status: "blocked",
+    assignee: "user-1",
+    sprint: mockSprints[3],
+    user: mockUsers[0],
+  },
+  {
+    id: "issue-13",
+    title: "Stripe integration",
+    description: "Integrate Stripe for payment processing",
+    sprint_id: "sprint-4",
+    status: "blocked",
+    assignee: "user-2",
+    sprint: mockSprints[3],
+    user: mockUsers[1],
+  },
+  {
+    id: "issue-14",
+    title: "Order confirmation",
+    description: "Create order confirmation page and email",
+    sprint_id: "sprint-4",
+    status: "blocked",
+    assignee: "user-4",
+    sprint: mockSprints[3],
+    user: mockUsers[3],
+  },
+]
+
+export const mockWorkflowData = {
+  organization: mockOrganization,
+  users: mockUsers,
+  projects: mockProjects,
+  sprints: mockSprints,
+  issues: mockIssues,
+}
