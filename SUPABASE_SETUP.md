@@ -46,31 +46,36 @@ This guide explains how to use Supabase Auth with your own Prisma-powered API.
 
 ## Setup Instructions
 
-### 1. Run the Prisma Migration
+### 1. Push the Prisma Schema
 
-The database schema, RLS policies, and triggers are all managed through Prisma migrations. To apply them:
+The database schema is managed through Prisma. To sync it:
 
 ```bash
-# Apply all pending migrations
-npx prisma migrate deploy
+# Push schema changes (bypasses shadow database)
+npm run db:push
 
-# Or for development (with generate)
-npx prisma migrate dev
+# Or directly:
+npx prisma db push
 ```
 
 This will:
-- Create `profiles` and `posts` tables
+- Create `profiles`, `posts`, `organizations`, and `organization_memberships` tables
 - Set up foreign keys to `auth.users`
-- Configure Row Level Security (RLS)
-- Create a trigger to auto-sync user data
-- Backfill existing users automatically
+- Auto-generate TypeScript types
 
-The migration file is located at:
-```
-prisma/migrations/20251004183525_supabase_auth_setup/migration.sql
-```
+### 2. Apply RLS Policies
 
-### 2. Configure Environment Variables
+RLS policies are managed separately via Supabase SQL Editor:
+
+1. Go to: https://supabase.com/dashboard/project/YOUR_PROJECT/sql
+2. Copy contents from:
+   - `prisma/migrations/20251004183525_supabase_auth_setup/migration.sql` (lines 54-163 for initial RLS)
+   - `supabase/migrations/20251004200000_add_organization_rls_policies.sql` (for organization RLS)
+3. Paste and click "Run"
+
+**Why separate?** Prisma can't access Supabase's `auth` schema, so we manage RLS policies as SQL files.
+
+### 3. Configure Environment Variables
 
 Make sure your `.env` has:
 
@@ -84,7 +89,7 @@ DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@[YOUR-PROJECT-REF].supabase.c
 DIRECT_URL=postgresql://postgres:[YOUR-PASSWORD]@[YOUR-PROJECT-REF].supabase.co:5432/postgres
 ```
 
-### 3. Test Your Setup
+### 4. Test Your Setup
 
 Start your development server:
 
@@ -383,18 +388,17 @@ npx prisma generate
 
 ---
 
-## Creating New Migrations
+## Making Schema Changes
 
-When you make changes to your Prisma schema, create a new migration:
+When you make changes to your Prisma schema:
 
 ```bash
-# Create a new migration
-npx prisma migrate dev --name add_comments
+# 1. Update prisma/schema.prisma
 
-# This will:
-# 1. Generate the SQL based on schema changes
-# 2. Apply it to your database
-# 3. Regenerate Prisma Client
+# 2. Push changes to database
+npm run db:push
+
+# 3. Add RLS policies (if needed) via Supabase SQL Editor
 ```
 
 ### Example: Adding Comments
@@ -424,13 +428,13 @@ model Post {
 }
 ```
 
-2. **Create the migration:**
+2. **Push to database:**
 
 ```bash
-npx prisma migrate dev --name add_comments
+npm run db:push
 ```
 
-3. **Manually add RLS policies** to the generated migration file:
+3. **Create RLS policy file** `supabase/migrations/YYYYMMDD_add_comments_rls.sql`:
 
 ```sql
 -- Enable RLS
@@ -458,11 +462,7 @@ TO authenticated
 USING (auth.uid() = user_id);
 ```
 
-4. **Reset and reapply** (in development):
-
-```bash
-npx prisma migrate reset --force
-```
+4. **Apply RLS policies** in Supabase SQL Editor
 
 ---
 

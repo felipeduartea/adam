@@ -1,6 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
-import postsRouter from "@/server/modules/posts/posts.router";
+import linearRouter from "@/server/modules/linear/linear.router";
+import zendeskRouter from "@/server/modules/zendesk/zendesk.router";
 
-const router = new OpenAPIHono().route("/posts", postsRouter);
+const router = new OpenAPIHono().route("/linear", linearRouter).route("/zendesk", zendeskRouter);
 
 export default router;
