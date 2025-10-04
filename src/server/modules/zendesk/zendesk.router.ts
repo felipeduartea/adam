@@ -1,10 +1,11 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual, randomBytes } from "node:crypto";
 
 import { Prisma, ZendeskIntegrationStatus } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { newOpenAPIHono } from "@/server/lib/router";
+import { requireAuthentication, Variables } from "@/server/middleware";
 
 const ZendeskWebhookRoute = createRoute({
   method: "post",
@@ -68,6 +69,87 @@ const ZendeskWebhookRoute = createRoute({
   },
 });
 
+const ZendeskWebhookSetupRoute = createRoute({
+  method: "post",
+  path: "/webhook/setup",
+  middleware: [requireAuthentication] as const,
+  tags: ["Zendesk"],
+  summary: "Create or regenerate webhook token",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            zendeskSubdomain: z.string().min(1),
+          }),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Webhook token created/regenerated",
+      content: {
+        "application/json": {
+          schema: z.object({
+            webhookUrl: z.string(),
+            signingSecret: z.string(),
+            endpointPath: z.string(),
+          }),
+        },
+      },
+    },
+    404: {
+      description: "Integration not found",
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+    },
+  },
+});
+
+const ZendeskWebhookInfoRoute = createRoute({
+  method: "get",
+  path: "/webhook/info",
+  middleware: [requireAuthentication] as const,
+  tags: ["Zendesk"],
+  summary: "Get webhook configuration",
+  request: {
+    query: z.object({
+      zendeskSubdomain: z.string().min(1),
+    }),
+  },
+  responses: {
+    200: {
+      description: "Webhook configuration",
+      content: {
+        "application/json": {
+          schema: z.object({
+            webhookUrl: z.string(),
+            endpointPath: z.string(),
+            isActive: z.boolean(),
+            createdAt: z.string(),
+          }),
+        },
+      },
+    },
+    404: {
+      description: "Webhook not found",
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+    },
+  },
+});
+
 type JsonObject = Record<string, unknown>;
 
 type ParsedTicket = {
@@ -94,8 +176,118 @@ type ParsedMessage = {
   createdAtVendor: Date | null;
 };
 
-const router = newOpenAPIHono();
+const router = newOpenAPIHono<{ Variables: Variables }>();
 
+// Webhook setup endpoint
+router.openapi(ZendeskWebhookSetupRoute, async (c) => {
+  const userId = c.get("userId");
+  const { zendeskSubdomain } = c.req.valid("json");
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { organizationId: true },
+  });
+
+  if (!user?.organizationId) {
+    return c.json({ error: "User not associated with an organization" }, 404);
+  }
+
+  const integration = await prisma.zendeskIntegration.findUnique({
+    where: {
+      organizationId_zendeskSubdomain: {
+        organizationId: user.organizationId,
+        zendeskSubdomain,
+      },
+    },
+  });
+
+  if (!integration) {
+    return c.json({ error: "Zendesk integration not found" }, 404);
+  }
+
+  // Generate secure random token and signing secret
+  const webhookToken = randomBytes(32).toString("hex");
+  const signingSecret = randomBytes(32).toString("base64");
+  const endpointPath = `/webhook/${webhookToken}`;
+
+  await prisma.zendeskWebhook.upsert({
+    where: {
+      zendeskIntegrationId: integration.id,
+    },
+    create: {
+      zendeskIntegrationId: integration.id,
+      endpointPath,
+      signingSecret,
+      isActive: true,
+    },
+    update: {
+      endpointPath,
+      signingSecret,
+      isActive: true,
+    },
+  });
+
+  // Get the base URL from the request
+  const protocol = c.req.header("x-forwarded-proto") || "https";
+  const host = c.req.header("host");
+  const webhookUrl = `${protocol}://${host}/api/zendesk${endpointPath}`;
+
+  return c.json(
+    {
+      webhookUrl,
+      signingSecret,
+      endpointPath,
+    },
+    200,
+  );
+});
+
+// Webhook info endpoint
+router.openapi(ZendeskWebhookInfoRoute, async (c) => {
+  const userId = c.get("userId");
+  const { zendeskSubdomain } = c.req.valid("query");
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { organizationId: true },
+  });
+
+  if (!user?.organizationId) {
+    return c.json({ error: "User not associated with an organization" }, 404);
+  }
+
+  const integration = await prisma.zendeskIntegration.findUnique({
+    where: {
+      organizationId_zendeskSubdomain: {
+        organizationId: user.organizationId,
+        zendeskSubdomain,
+      },
+    },
+    include: {
+      webhook: true,
+    },
+  });
+
+  if (!integration?.webhook) {
+    return c.json({ error: "Webhook not found" }, 404);
+  }
+
+  const protocol = c.req.header("x-forwarded-proto") || "https";
+  const host = c.req.header("host");
+  const webhookUrl = `${protocol}://${host}/api/zendesk${integration.webhook.endpointPath}`;
+
+  return c.json(
+    {
+      webhookUrl,
+      endpointPath: integration.webhook.endpointPath,
+      isActive: integration.webhook.isActive,
+      createdAt: integration.webhook.createdAt.toISOString(),
+    },
+    200,
+  );
+});
+
+// Webhook receiver endpoint
 router.openapi(ZendeskWebhookRoute, async (c) => {
   const { webhookToken } = c.req.valid("param");
   const requestPath = normaliseRequestPath(c.req.path);
