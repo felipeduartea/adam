@@ -15,17 +15,16 @@ export const requireAuthentication: MiddlewareHandler<{
   Variables: Variables;
 }> = async (c, next) => {
   try {
-    // Get cookie header from request
-    const cookieHeader = c.req.header("cookie") || "";
-    
-    // Verify the session using Better Auth with the cookie
+    // Verify the session using Better Auth with incoming request headers
     const session = await auth.api.getSession({
-      headers: new Headers({
-        cookie: cookieHeader,
-      }),
+      headers: c.req.raw.headers,
     });
 
     if (!session || !session.user) {
+      console.warn("Better Auth session missing", {
+        hasCookie: c.req.header("cookie")?.length ?? 0,
+        hasAuthHeader: Boolean(c.req.header("authorization")),
+      });
       throw new UnauthorizedError();
     }
 
@@ -35,6 +34,7 @@ export const requireAuthentication: MiddlewareHandler<{
     
     return next();
   } catch (error) {
+    console.error("Authentication middleware failed", error);
     throw new UnauthorizedError();
   }
 };

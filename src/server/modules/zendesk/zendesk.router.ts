@@ -93,7 +93,6 @@ const ZendeskWebhookSetupRoute = createRoute({
         "application/json": {
           schema: z.object({
             webhookUrl: z.string(),
-            signingSecret: z.string(),
             endpointPath: z.string(),
           }),
         },
@@ -192,22 +191,28 @@ router.openapi(ZendeskWebhookSetupRoute, async (c) => {
     return c.json({ error: "User not associated with an organization" }, 404);
   }
 
-  const integration = await prisma.zendeskIntegration.findUnique({
+  // Auto-create or find the Zendesk integration
+  const integration = await prisma.zendeskIntegration.upsert({
     where: {
       organizationId_zendeskSubdomain: {
         organizationId: user.organizationId,
         zendeskSubdomain,
       },
     },
+    create: {
+      organizationId: user.organizationId,
+      zendeskSubdomain,
+      status: "PENDING",
+      installerUserId: userId,
+    },
+    update: {
+      // Update installer if they're regenerating
+      installerUserId: userId,
+    },
   });
 
-  if (!integration) {
-    return c.json({ error: "Zendesk integration not found" }, 404);
-  }
-
-  // Generate secure random token and signing secret
+  // Generate secure random token (no signing secret needed)
   const webhookToken = randomBytes(32).toString("hex");
-  const signingSecret = randomBytes(32).toString("base64");
   const endpointPath = `/webhook/${webhookToken}`;
 
   await prisma.zendeskWebhook.upsert({
@@ -217,12 +222,12 @@ router.openapi(ZendeskWebhookSetupRoute, async (c) => {
     create: {
       zendeskIntegrationId: integration.id,
       endpointPath,
-      signingSecret,
+      signingSecret: "none", // Not used, but required by schema
       isActive: true,
     },
     update: {
       endpointPath,
-      signingSecret,
+      signingSecret: "none",
       isActive: true,
     },
   });
@@ -235,7 +240,6 @@ router.openapi(ZendeskWebhookSetupRoute, async (c) => {
   return c.json(
     {
       webhookUrl,
-      signingSecret,
       endpointPath,
     },
     200,
@@ -616,6 +620,8 @@ async function createRawEvent(
     if (!isUniqueConstraintError(error)) {
       throw error;
     }
+    // Duplicate event - this is normal, Zendesk sends webhooks multiple times for reliability
+    console.log(`ℹ️  Skipping duplicate event: ${params.vendorEventId || params.eventType}`);
   }
 }
 
