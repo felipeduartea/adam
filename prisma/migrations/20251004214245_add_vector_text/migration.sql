@@ -1,3 +1,7 @@
+
+-- Enable pgvector extension for vector embeddings
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- CreateTable
 CREATE TABLE "repos" (
     "id" UUID NOT NULL,
