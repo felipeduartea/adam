@@ -98,9 +98,9 @@ export default function WorkflowBuilder() {
           </div>
           <div>
             <h1 className="text-lg font-semibold text-foreground">
-              ADAM
+              {currentWorkflowId && workflowName ? workflowName : "Workflow Builder"}
             </h1>
-            <p className="text-sm text-muted-foreground">Rethink your decision-making</p>
+            <p className="text-sm text-muted-foreground">Create workflows with AI assistance</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
