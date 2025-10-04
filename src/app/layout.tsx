@@ -38,8 +38,18 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google";
 // import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
-import { Sidebar } from "@/components/ui/sidebar"
+import { Sidebar, SidebarProvider } from "@/components/ui/sidebar"
 import { Suspense } from "react"
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
   title: "ADAM",
@@ -52,21 +62,17 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
 
-  const geistMono = Geist_Mono({
-    variable: "--font-geist-mono",
-    subsets: ["latin"],
-  });
-
   return (
     <html lang="en">
-      <body className={`font-sans ${geistMono.variable} ${geistMono.variable}`}>
-        <div className="flex h-screen w-full overflow-hidden">
-          <Suspense fallback={<div>Loading...</div>}>
-            <Sidebar />
-            <main className="flex-1 overflow-hidden">{children}</main>
-          </Suspense>
-        </div>
-        <Analytics />
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <SidebarProvider>
+          <div className="flex h-screen w-full overflow-hidden">
+            <Suspense fallback={<div>Loading...</div>}>
+              <Sidebar />
+              <main className="flex-1 overflow-hidden">{children}</main>
+            </Suspense>
+          </div>
+        </SidebarProvider>
       </body>
     </html>
   )

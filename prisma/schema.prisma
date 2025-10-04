@@ -12,88 +12,324 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// Profile table references Supabase auth.users
-// This is your "public" user data that you can extend
-model Profile {
-  id         String    @id @db.Uuid // References auth.users(id)
-  email      String?
-  name       String?
-  avatarUrl  String?   @map("avatar_url")
-  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  
-  // Relations
-  posts      Post[]
-  memberships OrganizationMembership[]
-
-  @@map("profiles")
+// ---------- Enums ----------
+enum IssueStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
 }
 
-model Organization {
-  id          String    @id @default(uuid()) @db.Uuid
-  name        String
-  slug        String    @unique
-  description String?
-  avatarUrl   String?   @map("avatar_url")
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  
-  // Relations
-  memberships OrganizationMembership[]
-  posts       Post[]
-
-  @@map("organizations")
+enum ZendeskIntegrationStatus {
+  PENDING
+  ACTIVE
+  INACTIVE
+  ERROR
 }
 
-model OrganizationMembership {
-  id             String       @id @default(uuid()) @db.Uuid
-  userId         String       @map("user_id") @db.Uuid
-  organizationId String       @map("organization_id") @db.Uuid
-  role           String       @default("member") // owner, admin, member
-  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
-  
-  // Relations
-  user           Profile      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, organizationId])
-  @@index([userId])
-  @@index([organizationId])
-  @@map("organization_memberships")
-}
-
+// ---------- Base Models ----------
 model Post {
-  id             Int       @id @default(autoincrement())
-  title          String
-  content        String?
-  userId         String    @map("user_id") @db.Uuid
-  organizationId String?   @map("organization_id") @db.Uuid
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
-  
-  // Relations
-  user           Profile       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([organizationId])
-  @@map("posts")
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String?
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-model VectorText {
-  id             Int                       @id @default(autoincrement())
-  filePath       String                    @map("file_path")
-  chunkContent   String                    @map("chunk_content")
-  functionName   String?                   @map("function_name")
-  className      String?                   @map("class_name")
-  language       String
-  chunkType      String                    @map("chunk_type")
-  lineStart      Int                       @map("line_start")
-  lineEnd        Int                       @map("line_end")
-  embedding      Unsupported("vector(1536)")
-  metadata       Json?
-  createdAt      DateTime                  @default(now()) @map("created_at")
+model User {
+  id            String   @id
+  name          String
+  email         String
+  emailVerified Boolean
+  image         String?
+  createdAt     DateTime
+  updatedAt     DateTime
 
-  @@map("vector_text")
+  // Organization membership
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  // Relations
+  sessions       Session[]
+  accounts       Account[]
+  posts          Post[]
+  chatSessions   ChatSession[]
+  assignedIssues Issue[]       @relation("IssueAssignee")
+  linearUser     LinearUser?
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime
+  updatedAt DateTime
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime
+  updatedAt             DateTime
+
+  @@map("account")
+}
+
+model Verification {
+  id         String    @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime?
+  updatedAt  DateTime?
+
+  @@map("verification")
+}
+
+// ---------- Chat Sessions ----------
+model ChatSession {
+  id          String   @id @default(cuid())
+  timestamp   DateTime @default(now())
+  userMessage String
+  llmMessage  String
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------- Organizations ----------
+model Organization {
+  id   String @id @default(cuid())
+  name String
+
+  // --- Integrations ---
+  linearOrgId      String?           @unique
+  linearOrgName    String?
+  linearConnection LinearConnection?
+  zendeskSubdomain String? // optional subdomain display
+
+  // --- Relations ---
+  users               User[]
+  projects            Project[]
+  linearWebhooks      LinearWebhook[]
+  zendeskIntegrations ZendeskIntegration[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ---------- Linear Integration (org-scoped) ----------
+model Project {
+  id              String       @id @default(cuid())
+  title           String
+  description     String?
+  start_date      DateTime?
+  due_date        DateTime?
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  linearProjectId String?      @unique
+
+  sprints Sprint[]
+  issues  Issue[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Sprint {
+  id            String    @id @default(cuid())
+  title         String
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  description   String?
+  start_date    DateTime?
+  due_date      DateTime?
+  linearCycleId String?   @unique
+
+  issues Issue[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Issue {
+  id                   String      @id @default(cuid())
+  title                String
+  description          String?
+  sprint_date          DateTime?
+  status               IssueStatus @default(TODO)
+  projectId            String
+  project              Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sprintId             String?
+  sprint               Sprint?     @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  assigneeId           String?
+  assignee             User?       @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  linearIssueId        String?     @unique
+  assigneeLinearUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([sprintId])
+  @@index([status])
+}
+
+model LinearConnection {
+  id              String       @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  orgLinearId     String       @unique
+  orgName         String?
+  accessToken     String
+  refreshToken    String?
+  expiresAt       DateTime?
+  installerUserId String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([organizationId])
+  @@map("linear_connection")
+}
+
+model LinearUser {
+  id           String   @id @default(cuid())
+  orgLinearId  String
+  linearUserId String
+  name         String?
+  email        String?
+  avatarUrl    String?
+  localUserId  String?  @unique
+  localUser    User?    @relation(fields: [localUserId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([orgLinearId, linearUserId])
+  @@index([localUserId])
+}
+
+model LinearWebhook {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  endpointPath   String
+  secret         String
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, endpointPath])
+}
+
+// ---------- Zendesk Integration (MVP: webhook-only) ----------
+model ZendeskIntegration {
+  id               String                   @id @default(cuid())
+  organizationId   String
+  organization     Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  zendeskSubdomain String
+  status           ZendeskIntegrationStatus @default(PENDING)
+  installerUserId  String?
+  webhook          ZendeskWebhook?
+  tickets          ZendeskTicket[]
+  messages         ZendeskTicketMessage[]
+  events           ZendeskEventRaw[]
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  @@unique([organizationId, zendeskSubdomain])
+  @@index([organizationId])
+}
+
+model ZendeskWebhook {
+  id                   String             @id @default(cuid())
+  zendeskIntegrationId String
+  integration          ZendeskIntegration @relation(fields: [zendeskIntegrationId], references: [id], onDelete: Cascade)
+  endpointPath         String
+  signingSecret        String
+  isActive             Boolean            @default(true)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@unique([zendeskIntegrationId])
+  @@unique([zendeskIntegrationId, endpointPath])
+}
+
+model ZendeskEventRaw {
+  id                   String             @id @default(cuid())
+  zendeskIntegrationId String
+  integration          ZendeskIntegration @relation(fields: [zendeskIntegrationId], references: [id], onDelete: Cascade)
+  vendorEventId        String?
+  type                 String
+  receivedAt           DateTime           @default(now())
+  payloadJson          Json
+  payloadHash          String
+  processedAt          DateTime?
+
+  @@unique([zendeskIntegrationId, vendorEventId])
+  @@unique([zendeskIntegrationId, payloadHash])
+  @@index([zendeskIntegrationId, receivedAt])
+}
+
+model ZendeskTicket {
+  id                   String                 @id @default(cuid())
+  zendeskIntegrationId String
+  integration          ZendeskIntegration     @relation(fields: [zendeskIntegrationId], references: [id], onDelete: Cascade)
+  externalId           String
+  subject              String?
+  description          String?
+  status               String?
+  priority             String?
+  requesterId          String?
+  assigneeId           String?
+  tags                 String[]
+  url                  String?
+  createdAtVendor      DateTime?
+  updatedAtVendor      DateTime?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  messages             ZendeskTicketMessage[]
+
+  @@unique([zendeskIntegrationId, externalId])
+  @@index([zendeskIntegrationId, status])
+  @@index([zendeskIntegrationId, createdAtVendor])
+}
+
+model ZendeskTicketMessage {
+  id                   String             @id @default(cuid())
+  zendeskIntegrationId String
+  integration          ZendeskIntegration @relation(fields: [zendeskIntegrationId], references: [id], onDelete: Cascade)
+  ticketId             String
+  ticket               ZendeskTicket      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  externalMessageId    String?
+  authorId             String?
+  authorName           String?
+  authorEmail          String?
+  body                 String
+  isPrivate            Boolean            @default(false)
+  createdAtVendor      DateTime?
+  createdAt            DateTime           @default(now())
+
+  @@unique([zendeskIntegrationId, externalMessageId])
+  @@index([ticketId, createdAtVendor])
 }

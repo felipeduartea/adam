@@ -1,35 +1,16 @@
 "use client";
-import { createClient } from "@/lib/supabase/client";
+import { authClient } from "@/lib/auth-client";
 import { apiClient, type Post } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useState } from "react";
-import type { User } from "@supabase/supabase-js";
 
 export default function Home() {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: session, isPending: loading } = authClient.useSession();
+  const user = session?.user;
   const [posts, setPosts] = useState<Post[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const supabase = createClient();
-
-  useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
-  }, [supabase]);
 
   // Fetch posts when user is authenticated
   useEffect(() => {
@@ -55,16 +36,14 @@ export default function Home() {
   };
 
   const handleSignIn = async () => {
-    await supabase.auth.signInWithOAuth({
+    await authClient.signIn.social({
       provider: "github",
-      options: {
-        redirectTo: `${location.origin}/api/auth/callback`,
-      },
+      callbackURL: "/",
     });
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await authClient.signOut();
   };
 
   const formatDate = (dateString: string) => {
@@ -90,7 +69,7 @@ export default function Home() {
             ) : user ? (
               <div className="flex items-center gap-4">
                 <div className="text-sm text-gray-600">
-                  {user.user_metadata?.name || user.email}
+                  {user.name || user.email}
                 </div>
                 <Button variant="outline" onClick={handleSignOut}>
                   Sign out
@@ -144,23 +123,23 @@ export default function Home() {
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        {post.user?.avatarUrl && (
+                        {post.author?.image && (
                           <img
-                            src={post.user.avatarUrl}
-                            alt={post.user.name || "User"}
+                            src={post.author.image}
+                            alt={post.author.name || "User"}
                             className="w-10 h-10 rounded-full"
                           />
                         )}
                         <div>
                           <p className="font-medium text-gray-900">
-                            {post.user?.name || post.user?.email || "Unknown"}
+                            {post.author?.name || post.author?.email || "Unknown"}
                           </p>
                           <p className="text-sm text-gray-500">
                             {formatDate(post.createdAt)}
                           </p>
                         </div>
                       </div>
-                      {post.userId === user.id && (
+                      {post.authorId === user.id && (
                         <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
                           Your post
                         </span>

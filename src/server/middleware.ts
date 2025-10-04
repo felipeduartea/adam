@@ -1,6 +1,6 @@
-import { createServerClient } from "@supabase/ssr";
 import { MiddlewareHandler } from "hono";
 import { UnauthorizedError } from "./errors";
+import { auth } from "@/lib/auth";
 
 export type Variables = {
   userId: string;
@@ -8,60 +8,33 @@ export type Variables = {
 };
 
 /**
- * Middleware to require authentication via Supabase JWT
- * Extracts user info from the JWT and makes it available in context
+ * Middleware to require authentication via Better Auth
+ * Extracts user info from the session cookie and makes it available in context
  */
 export const requireAuthentication: MiddlewareHandler<{
   Variables: Variables;
 }> = async (c, next) => {
-  // Get authorization header
-  const authHeader = c.req.header("authorization");
-  
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    throw new UnauthorizedError();
-  }
+  try {
+    // Get cookie header from request
+    const cookieHeader = c.req.header("cookie") || "";
+    
+    // Verify the session using Better Auth with the cookie
+    const session = await auth.api.getSession({
+      headers: new Headers({
+        cookie: cookieHeader,
+      }),
+    });
 
-  const token = authHeader.substring(7);
-
-  // Create Supabase client to verify the token
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          const cookies = c.req.header("cookie");
-          if (!cookies) return [];
-          return cookies.split(";").map((cookie) => {
-            const [name, ...rest] = cookie.trim().split("=");
-            return { name, value: rest.join("=") };
-          });
-        },
-        setAll() {
-          // No-op for API routes
-        },
-      },
-      global: {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
+    if (!session || !session.user) {
+      throw new UnauthorizedError();
     }
-  );
 
-  // Verify the user
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
+    // Set user info in context for use in route handlers
+    c.set("userId", session.user.id);
+    c.set("userEmail", session.user.email);
+    
+    return next();
+  } catch (error) {
     throw new UnauthorizedError();
   }
-
-  // Set user info in context for use in route handlers
-  c.set("userId", user.id);
-  c.set("userEmail", user.email);
-  
-  return next();
 };

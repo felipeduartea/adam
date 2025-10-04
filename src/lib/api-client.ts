@@ -1,9 +1,9 @@
 /**
  * API Client for authenticated requests to your Hono API
- * Automatically includes Supabase JWT token in requests
+ * Automatically includes Better Auth session token in requests
  */
 
-import { createClient } from "@/lib/supabase/client";
+import { authClient } from "@/lib/auth-client";
 
 class APIClient {
   private baseURL: string;
@@ -13,42 +13,33 @@ class APIClient {
   }
 
   /**
-   * Get the current access token from Supabase
-   */
-  private async getAccessToken(): Promise<string | null> {
-    const supabase = createClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    return session?.access_token ?? null;
-  }
-
-  /**
    * Make an authenticated request to your API
+   * Better Auth stores session in cookies, so we don't need to manually pass the token
    */
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const token = await this.getAccessToken();
-
     const headers: HeadersInit = {
       "Content-Type": "application/json",
       ...options.headers,
     };
 
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
-    }
-
     const response = await fetch(`${this.baseURL}${endpoint}`, {
       ...options,
       headers,
+      credentials: "include", // Include cookies for Better Auth session
     });
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || "API request failed");
+      console.error("API Error:", {
+        status: response.status,
+        statusText: response.statusText,
+        endpoint,
+        error,
+      });
+      throw new Error(error.message || `API request failed: ${response.status} ${response.statusText}`);
     }
 
     // Handle 204 No Content
@@ -89,13 +80,13 @@ export interface Post {
   id: number;
   title: string;
   content: string | null;
-  userId: string;
+  authorId: string;
   createdAt: string;
   updatedAt: string;
-  user?: {
+  author?: {
     name: string | null;
     email: string | null;
-    avatarUrl: string | null;
+    image: string | null;
   };
 }
 
