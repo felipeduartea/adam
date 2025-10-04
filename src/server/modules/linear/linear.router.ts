@@ -1,19 +1,65 @@
 import { createRoute, z } from "@hono/zod-openapi";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 import { prisma } from "@/lib/prisma";
 import { InternalServerError } from "@/server/errors";
 import { newOpenAPIHono } from "@/server/lib/router";
 import { requireAuthentication, Variables } from "@/server/middleware";
 
+const LinearAuthorizeRoute = createRoute({
+  method: "post",
+  path: "/authorize",
+  middleware: [requireAuthentication] as const,
+  tags: ["Linear"],
+  summary: "Generate Linear authorization URL with state",
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: z
+            .object({
+              scope: z.string().optional(),
+              redirectUri: z.string().url().optional(),
+            })
+            .optional(),
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Authorization URL generated",
+      content: {
+        "application/json": {
+          schema: z.object({
+            authorizationUrl: z.string().url(),
+            state: z.string(),
+          }),
+        },
+      },
+    },
+    400: {
+      description: "Unable to build authorization request",
+      content: {
+        "application/json": {
+          schema: z.object({
+            error: z.string(),
+          }),
+        },
+      },
+    },
+  },
+});
+
 const LinearConnectRoute = createRoute({
   method: "get",
   path: "/connect",
-  middleware: [requireAuthentication] as const,
   tags: ["Linear"],
   summary: "Handle Linear OAuth callback",
   request: {
     query: z.object({
       code: z.string().min(1),
+      state: z.string().min(1),
     }),
   },
   responses: {
@@ -21,7 +67,7 @@ const LinearConnectRoute = createRoute({
       description: "Redirect back to the application",
     },
     400: {
-      description: "Missing OAuth code",
+      description: "Invalid OAuth callback",
       content: {
         "application/json": {
           schema: z.object({
@@ -51,29 +97,119 @@ function getEnvVar(name: string) {
   return value;
 }
 
+type LinearStatePayload = {
+  userId: string;
+  organizationId: string;
+  exp: number;
+  nonce: string;
+};
+
+function getStateSecret() {
+  return (
+    process.env.LINEAR_STATE_SECRET ||
+    process.env.BETTER_AUTH_SECRET ||
+    process.env.LINEAR_CLIENT_SECRET ||
+    "linear-state-fallback-secret"
+  );
+}
+
+function encodeState(payload: LinearStatePayload) {
+  const secret = getStateSecret();
+  const json = JSON.stringify(payload);
+  const signature = createHmac("sha256", secret).update(json).digest("base64url");
+  const body = Buffer.from(json).toString("base64url");
+  return `${body}.${signature}`;
+}
+
+function decodeState(state: string): LinearStatePayload {
+  const secret = getStateSecret();
+  const [body, signature] = state.split(".");
+  if (!body || !signature) {
+    throw new Error("Malformed state");
+  }
+
+  const payloadBuffer = Buffer.from(body, "base64url");
+  const expectedSignature = createHmac("sha256", secret).update(payloadBuffer).digest("base64url");
+
+  const signatureBuffer = Buffer.from(signature, "base64url");
+  const expectedBuffer = Buffer.from(expectedSignature, "base64url");
+
+  if (signatureBuffer.length !== expectedBuffer.length || !timingSafeEqual(signatureBuffer, expectedBuffer)) {
+    throw new Error("Invalid state signature");
+  }
+
+  const payload = JSON.parse(payloadBuffer.toString("utf8")) as LinearStatePayload;
+
+  if (payload.exp < Date.now()) {
+    throw new Error("State expired");
+  }
+
+  return payload;
+}
+
 const router = newOpenAPIHono<{ Variables: Variables }>();
 
-router.openapi(LinearConnectRoute, async (c) => {
-  const { code } = c.req.valid("query");
+router.openapi(LinearAuthorizeRoute, async (c) => {
+  const body = (await c.req.json().catch(() => undefined)) as { scope?: string; redirectUri?: string } | undefined;
+  const scope = body?.scope ?? "read,write";
+  const redirectUri = body?.redirectUri ?? getEnvVar("LINEAR_REDIRECT_URI");
+  const userId = c.get("userId") as string;
 
-  if (!code) {
-    return c.json({ error: "missing code" }, 400);
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, organizationId: true },
+  });
+
+  if (!user?.organizationId) {
+    return c.json({ error: "User is not associated with an organization" }, 400);
   }
+
+  const clientId = getEnvVar("LINEAR_CLIENT_ID");
+  const expiresInMs = 10 * 60 * 1000; // 10 minutes
+  const statePayload: LinearStatePayload = {
+    userId: user.id,
+    organizationId: user.organizationId,
+    exp: Date.now() + expiresInMs,
+    nonce: randomBytes(16).toString("hex"),
+  };
+
+  const state = encodeState(statePayload);
+
+  const authorizationUrl = new URL("https://linear.app/oauth/authorize");
+  authorizationUrl.searchParams.set("client_id", clientId);
+  authorizationUrl.searchParams.set("redirect_uri", redirectUri);
+  authorizationUrl.searchParams.set("response_type", "code");
+  authorizationUrl.searchParams.set("scope", scope);
+  authorizationUrl.searchParams.set("state", state);
+
+  return c.json({ authorizationUrl: authorizationUrl.toString(), state }, 200);
+});
+
+router.openapi(LinearConnectRoute, async (c) => {
+  const { code, state } = c.req.valid("query");
 
   const clientId = getEnvVar("LINEAR_CLIENT_ID");
   const clientSecret = getEnvVar("LINEAR_CLIENT_SECRET");
   const redirectUri = getEnvVar("LINEAR_REDIRECT_URI");
 
+  let statePayload: LinearStatePayload;
+  try {
+    statePayload = decodeState(state);
+  } catch (error) {
+    console.error("Failed to decode Linear state", error);
+    return c.json({ error: "Invalid state parameter" }, 400);
+  }
+
   const tokenResponse = await fetch("https://api.linear.app/oauth/token", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
       grant_type: "authorization_code",
       code,
       client_id: clientId,
       client_secret: clientSecret,
       redirect_uri: redirectUri,
-    }),
+    }).toString(),
   });
 
   if (!tokenResponse.ok) {
@@ -146,15 +282,15 @@ router.openapi(LinearConnectRoute, async (c) => {
 
   const linearOrgId = viewer.organization.id;
   const linearOrgName = viewer.organization.name ?? null;
-  const userId = c.get("userId");
+  const userId = statePayload.userId;
 
   const currentUser = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, organizationId: true },
   });
 
-  if (!currentUser?.organizationId) {
-    return c.json({ error: "Authenticated user is not associated with an organization" }, 400);
+  if (!currentUser?.organizationId || currentUser.organizationId !== statePayload.organizationId) {
+    return c.json({ error: "User organization mismatch" }, 400);
   }
 
   const expiresAt =
@@ -218,7 +354,7 @@ router.openapi(LinearConnectRoute, async (c) => {
 
   const redirectParams = new URLSearchParams({
     orgId: linearOrgId,
-    organizationId: currentUser.organizationId,
+    organizationId: currentUser.organizationId!,
     status: "success",
   });
 

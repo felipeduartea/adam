@@ -1,11 +1,103 @@
+-- CreateExtension
+CREATE EXTENSION IF NOT EXISTS "pg_graphql";
+
+-- CreateExtension
+CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
+
+-- CreateExtension
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- CreateExtension
+CREATE EXTENSION IF NOT EXISTS "supabase_vault";
+
+-- CreateExtension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- CreateExtension
+CREATE EXTENSION IF NOT EXISTS "vector";
+
 -- CreateEnum
 CREATE TYPE "IssueStatus" AS ENUM ('TODO', 'IN_PROGRESS', 'DONE', 'CANCELLED');
 
 -- CreateEnum
+CREATE TYPE "IssuePriority" AS ENUM ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL');
+
+-- CreateEnum
+CREATE TYPE "IssueComplexity" AS ENUM ('TRIVIAL', 'SIMPLE', 'MODERATE', 'COMPLEX', 'VERY_COMPLEX');
+
+-- CreateEnum
 CREATE TYPE "ZendeskIntegrationStatus" AS ENUM ('PENDING', 'ACTIVE', 'INACTIVE', 'ERROR');
 
--- AlterTable
-ALTER TABLE "user" ADD COLUMN     "organizationId" TEXT;
+-- CreateTable
+CREATE TABLE "Post" (
+    "id" SERIAL NOT NULL,
+    "title" TEXT NOT NULL,
+    "content" TEXT,
+    "authorId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Post_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "user" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
+    "emailVerified" BOOLEAN NOT NULL,
+    "image" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "organizationId" TEXT,
+
+    CONSTRAINT "user_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "session" (
+    "id" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "token" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "ipAddress" TEXT,
+    "userAgent" TEXT,
+    "userId" TEXT NOT NULL,
+
+    CONSTRAINT "session_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "account" (
+    "id" TEXT NOT NULL,
+    "accountId" TEXT NOT NULL,
+    "providerId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "accessToken" TEXT,
+    "refreshToken" TEXT,
+    "idToken" TEXT,
+    "accessTokenExpiresAt" TIMESTAMP(3),
+    "refreshTokenExpiresAt" TIMESTAMP(3),
+    "scope" TEXT,
+    "password" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "account_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "verification" (
+    "id" TEXT NOT NULL,
+    "identifier" TEXT NOT NULL,
+    "value" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3),
+    "updatedAt" TIMESTAMP(3),
+
+    CONSTRAINT "verification_pkey" PRIMARY KEY ("id")
+);
 
 -- CreateTable
 CREATE TABLE "ChatSession" (
@@ -68,9 +160,12 @@ CREATE TABLE "Issue" (
     "description" TEXT,
     "sprint_date" TIMESTAMP(3),
     "status" "IssueStatus" NOT NULL DEFAULT 'TODO',
+    "priority" "IssuePriority" NOT NULL DEFAULT 'MEDIUM',
+    "complexity" "IssueComplexity" NOT NULL DEFAULT 'MODERATE',
     "projectId" TEXT NOT NULL,
     "sprintId" TEXT,
     "assigneeId" TEXT,
+    "repoId" UUID,
     "linearIssueId" TEXT,
     "assigneeLinearUserId" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -201,6 +296,44 @@ CREATE TABLE "ZendeskTicketMessage" (
     CONSTRAINT "ZendeskTicketMessage_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "repos" (
+    "id" UUID NOT NULL,
+    "url" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "local_path" TEXT,
+    "userId" TEXT NOT NULL,
+    "created_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ(6) NOT NULL,
+
+    CONSTRAINT "repos_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "vector_text" (
+    "id" SERIAL NOT NULL,
+    "repo_id" UUID NOT NULL,
+    "file_path" TEXT NOT NULL,
+    "chunk_content" TEXT NOT NULL,
+    "function_name" TEXT,
+    "class_name" TEXT,
+    "language" TEXT NOT NULL,
+    "chunk_type" TEXT NOT NULL,
+    "line_start" INTEGER NOT NULL,
+    "line_end" INTEGER NOT NULL,
+    "embedding" vector(1536) NOT NULL,
+    "metadata" JSONB,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "vector_text_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "user_email_key" ON "user"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "session_token_key" ON "session"("token");
+
 -- CreateIndex
 CREATE UNIQUE INDEX "Organization_linearOrgId_key" ON "Organization"("linearOrgId");
 
@@ -221,6 +354,9 @@ CREATE INDEX "Issue_sprintId_idx" ON "Issue"("sprintId");
 
 -- CreateIndex
 CREATE INDEX "Issue_status_idx" ON "Issue"("status");
+
+-- CreateIndex
+CREATE INDEX "Issue_repoId_idx" ON "Issue"("repoId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "linear_connection_orgLinearId_key" ON "linear_connection"("orgLinearId");
@@ -276,8 +412,26 @@ CREATE INDEX "ZendeskTicketMessage_ticketId_createdAtVendor_idx" ON "ZendeskTick
 -- CreateIndex
 CREATE UNIQUE INDEX "ZendeskTicketMessage_zendeskIntegrationId_externalMessageId_key" ON "ZendeskTicketMessage"("zendeskIntegrationId", "externalMessageId");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "repos_url_key" ON "repos"("url");
+
+-- CreateIndex
+CREATE INDEX "repos_userId_idx" ON "repos"("userId");
+
+-- CreateIndex
+CREATE INDEX "vector_text_repo_id_idx" ON "vector_text"("repo_id");
+
+-- AddForeignKey
+ALTER TABLE "Post" ADD CONSTRAINT "Post_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
 -- AddForeignKey
 ALTER TABLE "user" ADD CONSTRAINT "user_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "session" ADD CONSTRAINT "session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "account" ADD CONSTRAINT "account_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "ChatSession" ADD CONSTRAINT "ChatSession_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -296,6 +450,9 @@ ALTER TABLE "Issue" ADD CONSTRAINT "Issue_sprintId_fkey" FOREIGN KEY ("sprintId"
 
 -- AddForeignKey
 ALTER TABLE "Issue" ADD CONSTRAINT "Issue_assigneeId_fkey" FOREIGN KEY ("assigneeId") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Issue" ADD CONSTRAINT "Issue_repoId_fkey" FOREIGN KEY ("repoId") REFERENCES "repos"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "linear_connection" ADD CONSTRAINT "linear_connection_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -323,3 +480,10 @@ ALTER TABLE "ZendeskTicketMessage" ADD CONSTRAINT "ZendeskTicketMessage_zendeskI
 
 -- AddForeignKey
 ALTER TABLE "ZendeskTicketMessage" ADD CONSTRAINT "ZendeskTicketMessage_ticketId_fkey" FOREIGN KEY ("ticketId") REFERENCES "ZendeskTicket"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "repos" ADD CONSTRAINT "repos_userId_fkey" FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "vector_text" ADD CONSTRAINT "vector_text_repo_id_fkey" FOREIGN KEY ("repo_id") REFERENCES "repos"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+

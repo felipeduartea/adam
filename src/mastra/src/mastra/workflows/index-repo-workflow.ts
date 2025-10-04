@@ -223,7 +223,8 @@ const cloneRepoStep = createStep({
   description: 'Clone GitHub repository to temporary directory',
   inputSchema: z.object({
     repoUrl: z.string().url(),
-    githubToken: z.string()
+    githubToken: z.string(),
+    userId: z.string()
   }),
   outputSchema: z.object({
     repoId: z.string(),
@@ -232,7 +233,7 @@ const cloneRepoStep = createStep({
     localPath: z.string()
   }),
   execute: async ({ inputData, mastra }) => {
-    const { repoUrl, githubToken } = inputData;
+    const { repoUrl, githubToken, userId } = inputData;
     
     // Extract repo name from URL
     const repoName = repoUrl.split('/').pop()?.replace('.git', '') || 'repo';
@@ -257,7 +258,8 @@ const cloneRepoStep = createStep({
       data: {
         url: repoUrl,
         name: repoName,
-        localPath: tempDir
+        localPath: tempDir,
+        userId
       }
     });
     
@@ -592,7 +594,8 @@ export const indexRepoWorkflow = createWorkflow({
   description: 'Clone and index a GitHub repository into vector database',
   inputSchema: z.object({
     repoUrl: z.string().url(),
-    githubToken: z.string()
+    githubToken: z.string(),
+    userId: z.string()
   }),
   outputSchema: z.object({
     repoId: z.string(),
