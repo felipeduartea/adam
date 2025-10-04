@@ -1,8 +1,9 @@
 import { Mastra } from "@mastra/core/mastra";
-import { weatherWorkflow } from "./workflows/weather-workflow";
-import { weatherAgent } from "./agents/weather-agent";
+import { dockerAgent } from "./agents/docker-agent";
+import { githubAgent } from "./agents/github-agent";
+import { plannerAgent } from "./agents/planner-agent";
 
 export const mastra = new Mastra({
-  workflows: { weatherWorkflow },
-  agents: { weatherAgent },
+  workflows: {},
+  agents: { dockerAgent, githubAgent, plannerAgent },
 });
