@@ -89,6 +89,31 @@ const LinearConnectRoute = createRoute({
   },
 });
 
+const LinearStatusRoute = createRoute({
+  method: "get",
+  path: "/status",
+  middleware: [requireAuthentication] as const,
+  tags: ["Linear"],
+  summary: "Get Linear integration status for the authenticated user's organization",
+  responses: {
+    200: {
+      description: "Linear connection status",
+      content: {
+        "application/json": {
+          schema: z.object({
+            connected: z.boolean(),
+            organizationId: z.string().nullable(),
+            linearOrgId: z.string().nullable(),
+            linearOrgName: z.string().nullable(),
+            installerUserId: z.string().nullable(),
+            updatedAt: z.string().nullable(),
+          }),
+        },
+      },
+    },
+  },
+});
+
 function getEnvVar(name: string) {
   const value = process.env[name];
   if (!value) {
@@ -363,6 +388,39 @@ router.openapi(LinearConnectRoute, async (c) => {
   }
 
   return c.redirect(`/connected?${redirectParams.toString()}`, 302);
+});
+
+router.openapi(LinearStatusRoute, async (c) => {
+  const userId = c.get("userId") as string;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { organizationId: true },
+  });
+
+  if (!user?.organizationId) {
+    return c.json({
+      connected: false,
+      organizationId: null,
+      linearOrgId: null,
+      linearOrgName: null,
+      installerUserId: null,
+      updatedAt: null,
+    });
+  }
+
+  const connection = await prisma.linearConnection.findUnique({
+    where: { organizationId: user.organizationId },
+  });
+
+  return c.json({
+    connected: Boolean(connection),
+    organizationId: user.organizationId,
+    linearOrgId: connection?.orgLinearId ?? null,
+    linearOrgName: connection?.orgName ?? null,
+    installerUserId: connection?.installerUserId ?? null,
+    updatedAt: connection?.updatedAt.toISOString() ?? null,
+  });
 });
 
 export default router;

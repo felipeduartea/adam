@@ -3,7 +3,8 @@
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { motion } from "framer-motion"
-import { Check } from "lucide-react"
+import { Check, Loader2 } from "lucide-react"
+import { useCallback } from "react"
 
 type Integration = {
   key: string
@@ -18,10 +19,27 @@ type Integration = {
 type IntegrationCardProps = {
   integration: Integration
   connected: boolean
-  index: number
+  loading?: boolean
+  connectedLabel?: string
+  helperText?: string | null
+  onEnable?: () => Promise<void> | void
 }
 
-export function IntegrationCard({ integration, connected, index }: IntegrationCardProps) {
+export function IntegrationCard({
+  integration,
+  connected,
+  loading,
+  connectedLabel,
+  helperText,
+  onEnable,
+}: IntegrationCardProps) {
+  const handleClick = useCallback(() => {
+    if (connected || loading) {
+      return
+    }
+    void onEnable?.()
+  }, [connected, loading, onEnable])
+
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
       <Card className="group relative flex h-full flex-col overflow-hidden border-border bg-white p-6 shadow-sm transition-all duration-300 hover:border-muted-foreground/30 hover:shadow-lg">
@@ -56,19 +74,29 @@ export function IntegrationCard({ integration, connected, index }: IntegrationCa
           </p>
 
           <Button
-            disabled={connected}
+            disabled={connected || loading}
             className="w-full transition-all duration-200"
             variant={connected ? "secondary" : "default"}
+            onClick={handleClick}
           >
             {connected ? (
               <span className="flex items-center gap-2">
                 <Check className="h-4 w-4 text-green-500" />
-                Integration enabled
+                {connectedLabel ?? "Integration enabled"}
+              </span>
+            ) : loading ? (
+              <span className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Connecting...
               </span>
             ) : (
               "Enable integration"
             )}
           </Button>
+
+          {helperText ? (
+            <p className="mt-3 break-words text-center text-xs text-muted-foreground">{helperText}</p>
+          ) : null}
         </div>
       </Card>
     </motion.div>
