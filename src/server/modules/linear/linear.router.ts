@@ -1,6 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 
-// import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { InternalServerError } from "@/server/errors";
 import { newOpenAPIHono } from "@/server/lib/router";
 import { requireAuthentication, Variables } from "@/server/middleware";
@@ -122,32 +122,32 @@ router.openapi(LinearConnectRoute, async (c) => {
   const orgId = viewerJson.data?.viewer?.organization?.id ?? null;
   const redirectTarget = orgId ? `/connected?orgId=${encodeURIComponent(orgId)}` : "/connected?error=missing_org";
 
-  // if (orgId) {
-  //   const user = c.var.user as { id: string };
-  //   const expiresAt =
-  //     typeof tokenJson.expires_in === "number" ? new Date(Date.now() + tokenJson.expires_in * 1000) : null;
+  if (orgId) {
+    const userId = c.get("userId");
+    const expiresAt =
+      typeof tokenJson.expires_in === "number" ? new Date(Date.now() + tokenJson.expires_in * 1000) : null;
 
-  //   await prisma.linearConnection.upsert({
-  //     where: {
-  //       userId_orgId: {
-  //         userId: user.id,
-  //         orgId,
-  //       },
-  //     },
-  //     update: {
-  //       accessToken,
-  //       refreshToken: tokenJson.refresh_token ?? null,
-  //       expiresAt,
-  //     },
-  //     create: {
-  //       userId: user.id,
-  //       orgId,
-  //       accessToken,
-  //       refreshToken: tokenJson.refresh_token ?? null,
-  //       expiresAt,
-  //     },
-  //   });
-  // }
+    // await prisma.linearConnection.upsert({
+    //   where: {
+    //     userId_orgId: {
+    //       userId,
+    //       orgId,
+    //     },
+    //   },
+    //   update: {
+    //     accessToken,
+    //     refreshToken: tokenJson.refresh_token ?? null,
+    //     expiresAt,
+    //   },
+    //   create: {
+    //     userId,
+    //     orgId,
+    //     accessToken,
+    //     refreshToken: tokenJson.refresh_token ?? null,
+    //     expiresAt,
+    //   },
+    // });
+  }
 
   return c.redirect(redirectTarget, 302);
 });
