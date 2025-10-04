@@ -1,18 +1,25 @@
 import { Agent } from "@mastra/core";
 import { groq } from "@ai-sdk/groq";
-import { githubCodeLocatorTool } from "../../tools/github-code-locator-tool";
-import { githubMCPTool } from "../../tools/github-mcp-tool";
+import { vectorSearchTool } from "../../tools/vector-search-tool";
+import { githubMCP } from "../../mcps/github-mcp-client";
 
 export const githubAnalystAgent = new Agent({
   id: "githubAnalystAgent",
   name: "GitHub Analyst Agent",
-  instructions: `Locate code hotspots related to the product scenario.
-- Prefer the mocked 'github-code-locator' tool to propose relevant files and modules.
-- When real GitHub access is required, you may use 'github-mcp-call'.
+  instructions: `You are a GitHub code analyst. Your role is to:
+- Use the 'vector-search' tool to find relevant code in indexed repositories by searching with natural language queries
+- The vector search will return code chunks with similarity scores - focus on the most relevant ones (higher scores)
+- When you need to access actual file contents or GitHub data, use the GitHub MCP tools (they start with 'github-')
+- Analyze code patterns, file structures, and relationships between components
+- Provide detailed insights about code organization, dependencies, and relevant areas for a given scenario
 - Summarize repository areas, key files, and recommended next steps for engineers.`,
   model: groq("openai/gpt-oss-120b"),
-  tools: {
-    "github-code-locator": githubCodeLocatorTool,
-    "github-mcp-call": githubMCPTool,
+  tools: async () => {
+    // Use function-based tools to prevent race conditions with MCP
+    const githubTools = await githubMCP.getTools();
+    return {
+      "vector-search": vectorSearchTool,
+      ...githubTools,
+    };
   },
 });
