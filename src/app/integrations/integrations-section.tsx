@@ -330,7 +330,7 @@ export function IntegrationsSection() {
   }, [integrationState.zendesk.details?.integration?.webhook?.webhookUrl])
 
   return (
-    <section className="relative h-screen w-full overflow-hidden bg-background">
+    <section className="relative h-full w-full overflow-auto bg-background">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-100 via-white to-gray-50" />
       <div
         className="absolute inset-0 opacity-[0.03]"
@@ -340,7 +340,7 @@ export function IntegrationsSection() {
       />
 
       {/* Content */}
-      <div className="relative z-10 mx-auto flex h-full max-w-7xl flex-col justify-center px-6 py-12 sm:py-16 lg:px-8">
+      <div className="relative z-10 mx-auto flex min-h-full max-w-7xl flex-col justify-center px-6 py-12 sm:py-16 lg:px-8">
         {/* Header */}
         <div className="mx-auto max-w-2xl text-center">
           <h1 className="text-balance text-5xl font-bold tracking-tight text-foreground sm:text-6xl lg:text-7xl">

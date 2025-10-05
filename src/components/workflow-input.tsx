@@ -14,9 +14,10 @@ interface WorkflowInputProps {
   setNodes: (nodes: Node[]) => void
   edges: Edge[]
   setEdges: (edges: Edge[]) => void
+  onMessageSend?: (message: string) => void
 }
 
-export default function WorkflowInput({ nodes, setNodes, edges, setEdges }: WorkflowInputProps) {
+export default function WorkflowInput({ nodes, setNodes, edges, setEdges, onMessageSend }: WorkflowInputProps) {
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
 
@@ -27,6 +28,14 @@ export default function WorkflowInput({ nodes, setNodes, edges, setEdges }: Work
     setIsLoading(true)
 
     try {
+      // If onMessageSend callback is provided, use it to create a ticket
+      if (onMessageSend) {
+        onMessageSend(input)
+        setInput("")
+        setIsLoading(false)
+        return
+      }
+
       const response = await fetch("/api/generate-workflow", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -67,7 +76,7 @@ export default function WorkflowInput({ nodes, setNodes, edges, setEdges }: Work
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Describe your project... (e.g., 'Build a mobile app with authentication and user profiles')"
+              placeholder="Create a support ticket... (e.g., 'User login not working')"
               disabled={isLoading}
               className="border-0 bg-transparent px-0 focus-visible:ring-0 focus-visible:ring-offset-0"
             />
@@ -87,7 +96,7 @@ export default function WorkflowInput({ nodes, setNodes, edges, setEdges }: Work
           </Button>
         </form>
         <p className="mt-2 text-center text-xs text-muted-foreground">
-          AI will generate a project workflow with sprints and issues
+          Type a message to create a support ticket in the timeline
         </p>
       </div>
     </div>

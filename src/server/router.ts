@@ -4,12 +4,14 @@ import linearIssuesRouter from "@/server/modules/linear/linear-issues.router";
 import linearSyncRouter from "@/server/modules/linear/linear-sync.router";
 import zendeskRouter from "@/server/modules/zendesk/zendesk.router";
 import postsRouter from "@/server/modules/posts/posts.router";
+import mastraRouter from "@/server/modules/mastra/mastra.router";
 
 const router = new OpenAPIHono()
   .route("/linear", linearRouter)
   .route("/linear", linearIssuesRouter)
   .route("/linear", linearSyncRouter)
   .route("/zendesk", zendeskRouter)
+  .route("/mastra", mastraRouter)
   .route("/posts", postsRouter);
 
 export default router;

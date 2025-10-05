@@ -18,12 +18,14 @@ import CustomNode from "./custom-node"
 import SprintNode from "./sprint-node"
 import LabeledSprintGroupNode from "./labeled-sprint-group-node"
 import IssueNode from "./issue-node"
+import TicketNode from "./ticket-node"
 import GroupNode from "./group-node"
 
 const nodeTypes = {
   custom: CustomNode,
   sprint: LabeledSprintGroupNode,
   issue: IssueNode,
+  ticket: TicketNode,
   group: GroupNode,
 }
 
@@ -80,8 +82,13 @@ export default function WorkflowCanvas({ nodes, setNodes, edges, setEdges }: Wor
         onEdgesChange={handleEdgesChange}
         onConnect={onConnect}
         nodeTypes={nodeTypes}
+        defaultEdgeOptions={{
+          type: 'smoothstep',
+          animated: true,
+        }}
         fitView
         className="bg-background"
+        elevateEdgesOnSelect
       >
         <Background className="bg-background" color="#333" gap={16} />
         <Controls className="bg-card border-border" />
